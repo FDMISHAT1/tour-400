@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Школьный музей — ГБОУ школа №400</title>
+<link rel="stylesheet" href="pannellum/pannellum.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; font-family: Arial, sans-serif; }
+  #panorama { width: 100%; height: 100%; }
+  /* Верхняя панель с названиями залов */
+  #scenebar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+    display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
+    background: linear-gradient(to bottom, rgba(0,0,0,.65), rgba(0,0,0,0));
+  }
+  #scenebar button {
+    background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.25);
+    border-radius: 16px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+  }
+  #scenebar button:hover { background: rgba(255,255,255,.28); }
+  #scenebar button.active { background: #2d7dd2; border-color: #2d7dd2; }
+  /* Иконка таблички-«i» */
+  .poi-pin {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: #2d7dd2 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30'><text x='15' y='22' font-size='20' fill='white' text-anchor='middle' font-family='Georgia'>i</text></svg>") center/cover no-repeat;
+    border: 2px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,.6); cursor: pointer;
+  }
+  .poi-pin:hover { transform: scale(1.15); }
+  /* Модальное окно таблички (содержимое — в изолированном iframe) */
+  #poi-overlay {
+    display: none; position: fixed; inset: 0; z-index: 20;
+    background: rgba(0,0,0,.6); align-items: center; justify-content: center;
+  }
+  #poi-box {
+    background: #fff; max-width: 820px; width: 92%; height: 85%;
+    border-radius: 8px; position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  #poi-close {
+    position: absolute; top: 6px; right: 10px; z-index: 2;
+    font-size: 28px; line-height: 1; border: none; background: rgba(255,255,255,.8);
+    border-radius: 50%; width: 36px; height: 36px; cursor: pointer; color: #333;
+  }
+  #poi-frame { border: none; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<div id="scenebar"></div>
+<div id="panorama"></div>
+
+<div id="poi-overlay">
+  <div id="poi-box">
+    <button id="poi-close" title="Закрыть">&times;</button>
+    <iframe id="poi-frame" title="Информация об экспонате"></iframe>
+  </div>
+</div>
+
+<script src="pannellum/pannellum.js"></script>
+<script src="tour-data.js"></script>
+<script>
+// Открыть табличку: показать её HTML в изолированном iframe (без вмешательства в страницу тура)
+function openPoi(_hotSpotDiv, poiId) {
+  document.getElementById('poi-frame').src = 'poi/' + poiId + '.html';
+  document.getElementById('poi-overlay').style.display = 'flex';
+}
+function closePoi() {
+  document.getElementById('poi-overlay').style.display = 'none';
+  document.getElementById('poi-frame').src = 'about:blank';
+}
+document.getElementById('poi-close').onclick = closePoi;
+document.getElementById('poi-overlay').onclick = function (e) {
+  if (e.target.id === 'poi-overlay') closePoi();
+};
+
+// Собираем конфиг Pannellum из данных тура
+var scenes = {};
+TOUR.scenes.forEach(function (s) {
+  var hs = s.hotSpots.map(function (h) {
+    if (h.type === 'info') {
+      return { type: 'info', pitch: h.pitch, yaw: h.yaw, cssClass: 'poi-pin',
+               text: h.title, clickHandlerFunc: openPoi, clickHandlerArgs: h.poiId };
+    }
+    return h; // переход между сценами — формат уже совместим
+  });
+  scenes[s.id] = {
+    title: s.title, type: 'multires', multiRes: s.multiRes,
+    hotSpots: hs, hfov: TOUR.default.hfov,
+  };
+});
+
+var viewer = pannellum.viewer('panorama', {
+  default: {
+    firstScene: TOUR.default.firstScene,
+    sceneFadeDuration: 700,
+    autoLoad: true,
+    compass: false,
+    hotSpotDebug: false,
+  },
+  scenes: scenes,
+});
+
+// Восстановим стартовый ракурс первой сцены
+viewer.setYaw(TOUR.default.yaw, false);
+viewer.setPitch(TOUR.default.pitch, false);
+
+// Панель залов
+var bar = document.getElementById('scenebar');
+TOUR.scenes.forEach(function (s) {
+  var b = document.createElement('button');
+  b.textContent = s.title;
+  b.dataset.id = s.id;
+  b.onclick = function () { viewer.loadScene(s.id); };
+  bar.appendChild(b);
+});
+function markActive() {
+  var cur = viewer.getScene();
+  bar.querySelectorAll('button').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.id === cur);
+  });
+}
+viewer.on('scenechange', markActive);
+viewer.on('load', markActive);
+</script>
+</body>
+</html>
